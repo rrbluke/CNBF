@@ -1,0 +1,13 @@
+{
+    "epochs": 100000,
+    "fs": 16000,
+    "duration": 5.0,
+    "wlen": 1024,
+    "shift": 256,
+    "nsrc": 2,
+    "predictions_path": "../predictions/",
+    "weights_path": "../weights/",
+    "train_path": "/clusterFS/project/beamforming/data/wsj0/si_tr_*/*/",
+    "eval_path": "/clusterFS/project/beamforming/data/wsj0/si_et_*/*/",
+    "test_path": "/clusterFS/project/beamforming/data/wsj0/si_et_*/*/"
+}
