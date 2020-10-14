@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath('../'))
 from loaders.audio_loader import audio_loader
 from loaders.rir_generator import rir_generator
 from algorithms.audio_processing import *
-from utils.mat_helper import *
+from utils.mat_helpers import *
 
 
 

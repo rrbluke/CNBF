@@ -25,7 +25,7 @@ pip install soundfile
 
 To add your speech database, edit the 'path' keys in the configuration file:
 ```
-nano cnbf.json
+nano -w cnbf.json
 ```
 
 
@@ -34,17 +34,20 @@ nano cnbf.json
 Training
 --------
 
-To train the model using real-valued layers
+To train the model using real-valued layers, use:
 ```
 cd experiments
 python cnbf_real.py
 ```
 
-To train the model using complex-valued layers
+To train the model using complex-valued layers, use:
 ```
 cd experiments
 python cnbf_complex.py
 ```
+
+During the first run, a cache file with pre-calculated RIRs will be generated. This may take several minutes.
+
 
 
 Inference
@@ -55,6 +58,10 @@ For testing, use:
 cd experiments
 python cnbf_complex.py --predict
 ```
+
+This will generate a prediction using a random wav file from the test set under predictions/.
+
+![predicitons](predictions/cnbf_complex_prediction.png "Prediction example")
 
 
 

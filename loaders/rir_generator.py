@@ -13,7 +13,7 @@ import pyroomacoustics as pra
 
 sys.path.append(os.path.abspath('../'))
 
-from utils.mat_helper import *
+from utils.mat_helpers import *
 
 
 
@@ -65,8 +65,8 @@ class rir_generator(object):
     #----------------------------------------------------------------------------
     def generate_whitening_matrix(self):
 
-        dist = self.micpos[:,np.newaxis,:] - self.micpos[np.newaxis,:,:]        # shape = (self.nmic, self.nmic, 3)
-        dist = np.linalg.norm(dist, axis=-1)                                    # shape = (self.nmic, self.nmic)
+        dist = self.micpos[:,np.newaxis,:] - self.micpos[np.newaxis,:,:]    # shape = (self.nmic, self.nmic, 3)
+        dist = np.linalg.norm(dist, axis=-1)                                # shape = (self.nmic, self.nmic)
         tau = dist/self.c
 
         self.U = np.zeros((self.nbin, self.nmic, self.nmic), dtype=np.complex64)      # whitening matrix
@@ -124,15 +124,15 @@ class rir_generator(object):
             for r in range(self.nrir):
 
                 # source 1 is randomly placed within region A
-                x = np.random.uniform(0.1, 2.0)
-                y = np.random.uniform(0.1, 3.9)
-                z = np.random.uniform(0.1, 2.4)
+                x = np.random.uniform(1.0, 2.0)
+                y = np.random.uniform(2.0, 3.0)
+                z = np.random.uniform(1.5, 2.0)
                 room.add_source([x, y, z], signal=0, delay=0)
 
                 # source 2 is randomly placed within region B
-                x = np.random.uniform(4.0, 5.9)
-                y = np.random.uniform(0.1, 3.9)
-                z = np.random.uniform(0.1, 2.4)
+                x = np.random.uniform(3.0, 4.0)
+                y = np.random.uniform(2.0, 3.0)
+                z = np.random.uniform(1.5, 2.0)
                 room.add_source([x, y, z], signal=0, delay=0)
 
 

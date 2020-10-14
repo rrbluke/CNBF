@@ -37,7 +37,7 @@ def audiowrite(x, filename, fs=16000, normalize=True):
 
 
 #-------------------------------------------------------------------------
-#convert STFT data back to time domain, and save to WAV-files
+# convert STFT data back to time domain, and save to WAV-files
 # data = tuple of STFT tensors
 # filenames = tuple of file names
 def convert_and_save_wavs(data, filenames, fs=16000):
@@ -45,8 +45,8 @@ def convert_and_save_wavs(data, filenames, fs=16000):
     for Fz, filename in zip(data, filenames):
         z = mistft(Fz)                                  # Fz.shape = (nfram, self.nbin)
 
-        mkdir_p(os.path.dirname(filename))
-        audiowrite(z, filename, fs=fs)
+        mkdir(os.path.dirname(filename))
+        audiowrite(z, filename, fs)
 
 
 
@@ -239,5 +239,12 @@ def convert_to_mfcc(Fx, filterbank):
 
     return mfcc
 
+
+
+#------------------------------------------------------------------------------
+def mkdir(path):
+
+    if not os.path.exists(os.path.dirname(path)): 
+        os.makedirs(os.path.dirname(path))
 
 

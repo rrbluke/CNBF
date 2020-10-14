@@ -12,16 +12,18 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 sys.path.append(os.path.abspath('../'))
 
 from keras.models import  Model
-from keras.layers import Dense, Activation, LSTM, Input, Lambda, Bidirectional
+from keras.layers import Dense, Activation, LSTM, Input, Lambda
 import keras.backend as K
 import tensorflow as tf
 
 from loaders.feature_generator import feature_generator
-from utils.mat_helper import save_numpy_to_mat, load_numpy_from_mat
+from utils.mat_helpers import *
 from utils.keras_helpers import *
 from ops.complex_ops import *
 from ops.complex_layers import *
 from ops.kernelized_layers import *
+from algorithms.audio_processing import *
+from utils.matplotlib_helpers import *
 
 
 np.set_printoptions(precision=3, threshold=3, edgeitems=3)
@@ -45,7 +47,7 @@ class cnbf(object):
         self.weights_file = self.config['weights_path'] + self.name + '.h5'
         self.predictions_file = self.config['predictions_path'] + self.name + '.mat'
 
-        self.nbatch = 10
+        self.nbatch = 5
         self.nfram = self.fgen.nfram
         self.nbin = self.fgen.nbin
         self.nmic = self.fgen.nmic
@@ -59,21 +61,28 @@ class cnbf(object):
 
         Fz = tf.cast(inp, tf.complex64)                                             # shape = (nbatch, nfram, nbin, nmic)
 
+        Pz = elementwise_abs2(Fz)                                                   # shape = (nbatch, nfram, nbin, nmic)
+        Pz = tf.reduce_mean(Pz, axis=-1)                                            # shape = (nbatch, nfram, nbin)
+        Lz = tf.math.log(Pz+1e-3)[...,tf.newaxis]                                   # shape = (nbatch, nfram, nbin, 1)
+        Lz = elementwise_complex(Lz)
+
         vz = vector_normalize_magnitude(Fz)                                         # shape = (nbatch, nfram, nbin, nmic)
         vz = vector_normalize_phase(vz)                                             # shape = (nbatch, nfram, nbin, nmic)
 
-        return vz
+        X = tf.concat([vz, Lz], axis=-1)                                            # shape = (nbatch, nfram, nbin, nmic+1)
+        Y = tf.reshape(X, [self.nbatch, self.nfram, self.nbin*(self.nmic+1)])       # shape = (nbatch, nfram, nbin*(nmic+1))
+
+        return [X,Y]
 
 
 
     #---------------------------------------------------------
     def layer1(self, inp):
 
-        X = tf.cast(inp, tf.complex64)                                             # shape = (nbatch, nfram, nbin, nmic)
+        X = tf.cast(inp[0], tf.complex64)                                           # shape = (nbatch, nfram, nbin, nmic+1)
+        Y = tf.cast(inp[1], tf.complex64)                                           # shape = (nbatch, nfram, nbin)
         
-        G = tf.reduce_mean(X[...,-1], axis=-1, keepdims=True)
-        G = tf.concat([G]*self.nbin, axis=-1)[...,tf.newaxis]
-        X = tf.concat([X,G], axis=-1)
+        X = tf.concat([X,Y[...,tf.newaxis]], axis=-1)
 
         return X
 
@@ -94,16 +103,16 @@ class cnbf(object):
         Fy = Fys+Fyn
 
         # energy of the beamformed outputs
-        Pys = elementwise_abs2(Fys)
-        Pyn = elementwise_abs2(Fyn)
-        Lys = 10*log10(tf.reduce_mean(Pys, axis=(1,2)) + 1e-3)
-        Lyn = 10*log10(tf.reduce_mean(Pyn, axis=(1,2)) + 1e-3)
+        Pys = tf.reduce_mean(elementwise_abs2(Fys), axis=(1,2))
+        Pyn = tf.reduce_mean(elementwise_abs2(Fyn), axis=(1,2))
+        Lys = 10*log10(Pys + 1e-3)
+        Lyn = 10*log10(Pyn + 1e-3)
 
         # energy of the inputs
-        Ps = elementwise_abs2(Fs)
-        Pn = elementwise_abs2(Fn)
-        Ls = 10*log10(tf.reduce_mean(Ps, axis=(1,2,3)) + 1e-3)
-        Ln = 10*log10(tf.reduce_mean(Pn, axis=(1,2,3)) + 1e-3)
+        Ps = tf.reduce_mean(elementwise_abs2(Fs), axis=(1,2,3))
+        Pn = tf.reduce_mean(elementwise_abs2(Fn), axis=(1,2,3))
+        Ls = 10*log10(Ps + 1e-3)
+        Ln = 10*log10(Pn + 1e-3)
 
         delta_snr = Lys-Lyn - (Ls-Ln)
 
@@ -124,12 +133,12 @@ class cnbf(object):
         Fn = Input(batch_shape=(self.nbatch, self.nfram, self.nbin, self.nmic), dtype=tf.complex64)
 
         Fz = Fs+Fn
-        X = Lambda(self.layer0)(Fz)                                                            # shape = (nbatch, nfram, nbin, nmic)
-        X = Kernelized_Complex_LSTM(units=self.nmic)(X)                                        # shape = (nbatch, nfram, nbin, nmic)
-        X = Kernelized_Complex_Dense(units=self.nmic, activation='tanh')(X)                    # shape = (nbatch, nfram, nbin, nmic)
-        X = Lambda(self.layer1)(X)
-        X = Kernelized_Complex_LSTM(units=self.nmic)(X)                                        # shape = (nbatch, nfram, nbin, nmic)
-        X = Kernelized_Complex_Dense(units=self.nmic, activation='tanh')(X)                    # shape = (nbatch, nfram, nbin, nmic)
+        X,Y = Lambda(self.layer0)(Fz)
+        Y = Complex_Dense(units=50, activation='tanh')(Y)                                      # shape = (nbatch, nfram, 50)
+        Y = Complex_Dense(units=self.nbin, activation='tanh')(Y)                               # shape = (nbatch, nfram, nbin)
+        X = Lambda(self.layer1)([X,Y])
+        X = Kernelized_Complex_LSTM(units=self.nmic*2)(X)                                      # shape = (nbatch, nfram, nbin, nmic*2)
+        X = Kernelized_Complex_Dense(units=self.nmic*2, activation='tanh')(X)                  # shape = (nbatch, nfram, nbin, nmic*2)
         W = Kernelized_Complex_Dense(units=self.nmic, activation='linear')(X)                  # shape = (nbatch, nfram, nbin, nmic)
 
         Fy, cost = Lambda(self.layer2)([Fs, Fn, W])
@@ -188,6 +197,32 @@ class cnbf(object):
 
 
 
+    #---------------------------------------------------------
+    def inference(self):
+
+        Fs, Fn = self.fgen.generate_mixtures(self.nbatch)
+        Fy = self.model.predict([Fs, Fn])
+
+        Fs = Fs[0,...,0].T
+        Fn = Fn[0,...,0].T
+        Fz = Fs+Fn
+        Fy = Fy[0,...].T
+
+        data = (Fz, Fy)
+        filenames = (
+                     self.config['predictions_path'] + self.name + '_noisy.wav',
+                     self.config['predictions_path'] + self.name + '_enhanced.wav',
+                    )
+        convert_and_save_wavs(data, filenames)
+
+        data = tuple(20*np.log10(np.abs(x)) for x in (Fz, Fy))
+        legend = ('noisy', 'enhanced')
+        clim = (-50, +30)
+        filename = self.config['predictions_path'] + self.name + '_prediction.png'
+        draw_subpcolor(data, legend, clim, filename)
+
+
+
 
 #---------------------------------------------------------
 #---------------------------------------------------------
@@ -229,7 +264,7 @@ if __name__ == "__main__":
         fgen = feature_generator(config, 'test')
         bf = cnbf(config, fgen)
         print('predict the model')
-        bf.save_prediction()
+        bf.inference()
 
 
 
