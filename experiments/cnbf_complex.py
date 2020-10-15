@@ -100,25 +100,24 @@ class cnbf(object):
         W = vector_normalize_phase(W)                                               # shape = (nbatch, nfram, nbin, nmic)
         Fys = vector_conj_inner(Fs, W)                                              # shape = (nbatch, nfram, nbin)
         Fyn = vector_conj_inner(Fn, W)                                              # shape = (nbatch, nfram, nbin)
-        Fy = Fys+Fyn
+
+        # energy of the input
+        Ps = tf.reduce_mean(elementwise_abs2(Fs), axis=-1)    # input (desired source)
+        Pn = tf.reduce_mean(elementwise_abs2(Fn), axis=-1)    # input (unwanted source)
+        Ls = 10*log10(Ps + 1e-2)
+        Ln = 10*log10(Pn + 1e-2)
 
         # energy of the beamformed outputs
-        Pys = tf.reduce_mean(elementwise_abs2(Fys), axis=(1,2))
-        Pyn = tf.reduce_mean(elementwise_abs2(Fyn), axis=(1,2))
-        Lys = 10*log10(Pys + 1e-3)
-        Lyn = 10*log10(Pyn + 1e-3)
-
-        # energy of the inputs
-        Ps = tf.reduce_mean(elementwise_abs2(Fs), axis=(1,2,3))
-        Pn = tf.reduce_mean(elementwise_abs2(Fn), axis=(1,2,3))
-        Ls = 10*log10(Ps + 1e-3)
-        Ln = 10*log10(Pn + 1e-3)
+        Pys = elementwise_abs2(Fys)                           # output (desired source)
+        Pyn = elementwise_abs2(Fyn)                           # output (unwanted source)
+        Lys = 10*log10(Pys + 1e-2)
+        Lyn = 10*log10(Pyn + 1e-2)
 
         delta_snr = Lys-Lyn - (Ls-Ln)
 
-        cost = -tf.reduce_mean(delta_snr)
+        cost = -tf.reduce_mean(delta_snr, axis=(1,2))
 
-        return [Fy, cost]
+        return [Fys, Fyn, cost]
 
 
 
@@ -141,9 +140,9 @@ class cnbf(object):
         X = Kernelized_Complex_Dense(units=self.nmic*2, activation='tanh')(X)                  # shape = (nbatch, nfram, nbin, nmic*2)
         W = Kernelized_Complex_Dense(units=self.nmic, activation='linear')(X)                  # shape = (nbatch, nfram, nbin, nmic)
 
-        Fy, cost = Lambda(self.layer2)([Fs, Fn, W])
+        Fys, Fyn, cost = Lambda(self.layer2)([Fs, Fn, W])
 
-        self.model = Model(inputs=[Fs, Fn], outputs=Fy)
+        self.model = Model(inputs=[Fs, Fn], outputs=[Fys, Fyn])
         self.model.add_loss(cost)
         self.model.compile(loss=None, optimizer='adam')
 
@@ -176,12 +175,13 @@ class cnbf(object):
     def save_prediction(self):
 
         Fs, Fn = self.fgen.generate_mixtures(self.nbatch)
-        Fy = self.model.predict([Fs, Fn])
+        Fys, Fyn = self.model.predict([Fs, Fn])
 
         data = {
             'Fs': np.transpose(Fs, [0,2,1,3])[0,:,:,0],                    # shape = (nbin, nfram)
             'Fn': np.transpose(Fn, [0,2,1,3])[0,:,:,0],                    # shape = (nbin, nfram)
-            'Fy': np.transpose(Fy, [0,2,1])[0,:,:],                        # shape = (nbin, nfram)
+            'Fys': np.transpose(Fys, [0,2,1])[0,:,:],                      # shape = (nbin, nfram)
+            'Fyn': np.transpose(Fyn, [0,2,1])[0,:,:],                      # shape = (nbin, nfram)
         }
         save_numpy_to_mat(self.predictions_file, data)
 
@@ -201,12 +201,14 @@ class cnbf(object):
     def inference(self):
 
         Fs, Fn = self.fgen.generate_mixtures(self.nbatch)
-        Fy = self.model.predict([Fs, Fn])
+        Fys, Fyn = self.model.predict([Fs, Fn])
 
-        Fs = Fs[0,...,0].T
-        Fn = Fn[0,...,0].T
-        Fz = Fs+Fn
-        Fy = Fy[0,...].T
+        Fs = Fs[0,...,0].T         # input (desired source)
+        Fn = Fn[0,...,0].T         # input (unwanted source)
+        Fys = Fys[0,...].T         # output (desired source)
+        Fyn = Fyn[0,...].T         # output (unwanted source)
+        Fz = Fs+Fn                 # noisy mixture
+        Fy = Fys+Fyn               # enhanced output
 
         data = (Fz, Fy)
         filenames = (
@@ -215,11 +217,12 @@ class cnbf(object):
                     )
         convert_and_save_wavs(data, filenames)
 
-        data = tuple(20*np.log10(np.abs(x)) for x in (Fz, Fy))
+        Lz = ( 20*np.log10(np.abs(Fs)+1e-1) - 20*np.log10(np.abs(Fn)+1e-1) )/30
+        Ly = ( 20*np.log10(np.abs(Fys)+1e-1) - 20*np.log10(np.abs(Fyn)+1e-1) )/30
         legend = ('noisy', 'enhanced')
-        clim = (-50, +30)
+        clim = (-1, +1)
         filename = self.config['predictions_path'] + self.name + '_prediction.png'
-        draw_subpcolor(data, legend, clim, filename)
+        draw_subpcolor((Lz, Ly), legend, clim, filename)
 
 
 
@@ -230,7 +233,7 @@ if __name__ == "__main__":
 
 
     # parse command line args
-    parser = argparse.ArgumentParser(description='speaker identification')
+    parser = argparse.ArgumentParser(description='CNBF')
     parser.add_argument('--config_file', help='name of json configuration file', default='../cnbf.json')
     parser.add_argument('--predict', help='inference', action='store_true')
     args = parser.parse_args()
@@ -250,7 +253,7 @@ if __name__ == "__main__":
     if args.predict is False:
         fgen = feature_generator(config, 'train')
         bf = cnbf(config, fgen)
-        print('train the model')
+        print('training')
         i = 0
         while (i<config['epochs']) and bf.check_date():
 
@@ -263,7 +266,7 @@ if __name__ == "__main__":
     else:
         fgen = feature_generator(config, 'test')
         bf = cnbf(config, fgen)
-        print('predict the model')
+        print('inference')
         bf.inference()
 
 

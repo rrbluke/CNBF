@@ -1,4 +1,3 @@
-# CNBF
 Complex Neural Beamformer
 =========================
 
@@ -59,7 +58,7 @@ cd experiments
 python cnbf_complex.py --predict
 ```
 
-This will generate a prediction using a random wav file from the test set under predictions/.
+This will generate a single prediction, using a random wav file from the test set.
 
 ![predicitons](predictions/cnbf_complex_prediction.png "Prediction example")
 

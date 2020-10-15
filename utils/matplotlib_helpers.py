@@ -9,7 +9,7 @@ import sys
 import matplotlib
 #matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+from matplotlib.colors import LinearSegmentedColormap
 
 
 
@@ -90,6 +90,9 @@ def draw_subplots(data, legend, filename=None):
 # clim = color limits (min, max)
 def draw_subpcolor(data, legend, clim, filename):
 
+    colors = [(1,0,0), (1,1,1), (0,0,1)]              # R -> W -> B
+    cmap = LinearSegmentedColormap.from_list('meow', colors, N=64)
+
     plt.switch_backend('agg')
     plt.ioff()
     fig = plt.figure()
@@ -99,16 +102,16 @@ def draw_subpcolor(data, legend, clim, filename):
     fig.set_size_inches(10, min(5*len(data),20))
 
     #use vertical padding of 2x the font size between the subplots to avoid overlapping labels
-    fig.tight_layout(h_pad=2, rect=(0,0,0.97,0.97))
+    fig.tight_layout(h_pad=2, rect=(0,0,0.99,0.97))
 
     #each legend,data tuple goes into a subplot
     for i, x in enumerate(data):
         ax = plt.subplot(len(data), 1, i+1)
-        plt.pcolor(x, cmap='jet')
+        plt.pcolor(x, cmap=cmap)
         plt.title(legend[i])
         ax.set_xlim([0, x.shape[1]])
         ax.set_ylim([0, x.shape[0]])
-        plt.colorbar(aspect=10, fraction=0.05)
+        plt.colorbar(aspect=20, fraction=0.05)
         plt.clim(*clim)
 
     fig.savefig(filename, dpi=200)
