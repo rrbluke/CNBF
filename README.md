@@ -10,13 +10,13 @@ This repository contains code to reproduce the experiments presented in our pape
 Requirements
 ------------
 
-The data loader uses Pyroomacoustics to generate artifical RIRs.
+The data loader uses the 'pyroomacoustics' package to generate artifical RIRs.
 Install with:
 ```
 pip install pyroomacoustics
 ```
 
-And soundfile to read/write wavs:
+And the 'soundfile' package to read/write wavs:
 ```
 pip install soundfile
 ```
@@ -45,7 +45,7 @@ cd experiments
 python cnbf_complex.py
 ```
 
-During the first run, a cache file with pre-calculated RIRs will be generated. This may take several minutes.
+During the first run, a cache file with pre-calculated RIRs will be generated. This may take a while.
 
 
 
@@ -59,6 +59,8 @@ python cnbf_complex.py --predict
 ```
 
 This will generate a single prediction, using a random wav file from the test set.
+The noisy and enhanced wavs will be written in the 'predictions/' folder.
+Spectrograms showing the desired/unwanted speech sources are generated before and after beamforming:
 
 ![predicitons](predictions/cnbf_complex_prediction.png "Prediction example")
 
