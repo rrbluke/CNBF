@@ -2,7 +2,7 @@ Complex Neural Beamformer
 =========================
 
 
-This repository contains code to reproduce the experiments presented in our paper
+This repository contains python/tensorflow code to reproduce the experiments presented in our paper
 [Deep Complex-valued Neural Beamformers](https://doi.org/10.1109/ICASSP.2019.8683517).
 
 
@@ -58,7 +58,7 @@ cd experiments
 python cnbf_complex.py --predict
 ```
 
-This will generate a single prediction, using a random wav file from the test set.
+This will generate a single prediction, using a mixture with two sources from random wav files from the test set.
 The noisy and enhanced wavs will be written in the 'predictions/' folder.
 Spectrograms showing the desired/unwanted speech sources are generated before and after beamforming:
 
